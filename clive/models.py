@@ -119,7 +119,7 @@ def vlos_mean(R, rlos, M):
     r    = np.sqrt(R**2 + rlos**2)
     sin = rlos / r
 
-    mode = RBinterp(np.log10(M), r).squeeze()*sin 
+    mode = RBinterp(np.log10(M), r, grid=False).squeeze()*sin 
 
     return mode
 
@@ -138,37 +138,6 @@ def sig_vm(x, M, pars):
 delta_mpars = [ 1.58565530e-01,  3.20425113e-01,  4.35742317e-05] 
 rho_pars    = [-4.53981362e-02,  3.74929938e-01,  1.07841238e+01]
 
-def Pv_R_rlos(v, R, rlos, M, pars_delta=delta_mpars, pars_sig=rho_pars):
-    """
-    Evaluates P(v | R, rlos, M) modeled as a Skew-T distribution.
-    """
-    # 1. Coordinate transformations
-    r = np.sqrt(R**2 + rlos**2)
-    x = r - R
-    
-    # 2. Evaluate physical quantities via your models
-    mu = vlos_mean(R, rlos, M)
-    sig_v = sig_vm(x, M, pars_sig)
-    
-    # Enforce symmetry: Delta flips sign when rlos is negative
-    sign_rlos = np.sign(rlos)
-    delta_val = Delta(x, M, pars_delta) * (sign_rlos if sign_rlos != 0 else 1.0)
-    
-    # 3. Interpolate standard Skew-T parameters
-    omega, alpha = skew_interp.get_skew_params(delta_val, sig_v)
-    
-    # 4. Location parameter is purely algebraic
-    xi = mu + delta_val
-    
-    # 5. Evaluate Skew-T PDF
-    nu = skew_interp.nu
-    z = (v - xi) / omega
-    
-    # Azzalini's Skew-T formulation: 2 * t.pdf(z) * t.cdf(alpha * z * sqrt...)
-    arg = alpha * z * np.sqrt((nu + 1) / (nu + z**2))
-    pdf = (2 / omega) * t.pdf(z, nu) * t.cdf(arg, nu + 1)
-    
-    return pdf
 
 
 def vlos_mean_vec(R, rlos, M, RBinterp=RBinterp):
@@ -202,6 +171,37 @@ def vlos_mean_vec(R, rlos, M, RBinterp=RBinterp):
     
     return mode
 
+def Pv_R_rlos(v, R, rlos, M, pars_delta=delta_mpars, pars_sig=rho_pars):
+    """
+    Evaluates P(v | R, rlos, M) modeled as a Skew-T distribution.
+    """
+    # 1. Coordinate transformations
+    r = np.sqrt(R**2 + rlos**2)
+    x = r - R
+    
+    # 2. Evaluate physical quantities via your models
+    mu = vlos_mean_vec(R, rlos, M)
+    sig_v = sig_vm(x, M, pars_sig)
+    
+    # Enforce symmetry: Delta flips sign when rlos is negative
+    sign_rlos = np.sign(rlos)
+    delta_val = Delta(x, M, pars_delta) * (sign_rlos if sign_rlos != 0 else 1.0)
+    
+    # 3. Interpolate standard Skew-T parameters
+    omega, alpha = skew_interp.get_skew_params(delta_val, sig_v)
+    
+    # 4. Location parameter is purely algebraic
+    xi = mu + delta_val
+    
+    # 5. Evaluate Skew-T PDF
+    nu = skew_interp.nu
+    z = (v - xi) / omega
+    
+    # Azzalini's Skew-T formulation: 2 * t.pdf(z) * t.cdf(alpha * z * sqrt...)
+    arg = alpha * z * np.sqrt((nu + 1) / (nu + z**2))
+    pdf = (2 / omega) * t.pdf(z, nu) * t.cdf(arg, nu + 1)
+    
+    return pdf
 
 def Pv_R_rlos_vec(v, R, rlos, M, pars_delta=delta_mpars, pars_sig=rho_pars):
     """
